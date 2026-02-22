@@ -35,17 +35,22 @@ export async function GET(request: NextRequest) {
         }).then((qs) => qs.map((q) => q.raceName))
       : []
 
-    // Prendre une race aléatoire parmi celles pas vues dans la session
+    // Préférer les races enrichies manuellement pour le quiz
+    // Si aucune race enrichie disponible, fallback sur toutes les races
+    const totalEnrichies = await prisma.race.count({ where: { enrichie: true } })
+    const filtreEnrichie = totalEnrichies > 0 ? { enrichie: true } : {}
+
     const races = await prisma.race.findMany({
-      where: racesVues.length > 0
-        ? { name: { notIn: racesVues } }
-        : undefined,
+      where: {
+        ...filtreEnrichie,
+        ...(racesVues.length > 0 ? { name: { notIn: racesVues } } : {}),
+      },
       select: { name: true },
     })
 
     if (races.length === 0) {
       return NextResponse.json(
-        { erreur: 'Toutes les races ont été jouées dans cette session !' },
+        { erreur: 'Toutes les races enrichies ont été jouées dans cette session ! Enrichissez davantage de races ou recommencez.' },
         { status: 404 },
       )
     }

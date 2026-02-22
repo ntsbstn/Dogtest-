@@ -387,6 +387,8 @@ async function main() {
       typeQueue: enrichi?.typeQueue ?? ['Droite'],
       typePoil: enrichi?.typePoil ?? ['Court'],
       dogApiId: theDogData?.id ?? null,
+      // Marquer comme enrichie uniquement les races avec des données manuelles validées
+      enrichie: !!enrichi,
     }
 
     const existing = await prisma.race.findUnique({ where: { name: raceName } })

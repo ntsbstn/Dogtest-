@@ -8,9 +8,10 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const LIENS = [
-  { href: '/',      label: 'Accueil',     icone: '🏠' },
-  { href: '/quiz',  label: 'Quiz',        icone: '🐕' },
-  { href: '/stats', label: 'Statistiques', icone: '📊' },
+  { href: '/',        label: 'Accueil',      icone: '🏠' },
+  { href: '/enrichir', label: 'Enrichir DB', icone: '✏️' },
+  { href: '/quiz',    label: 'Quiz',         icone: '🐕' },
+  { href: '/stats',   label: 'Stats',        icone: '📊' },
 ]
 
 export default function Navigation() {
