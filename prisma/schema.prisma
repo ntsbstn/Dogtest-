@@ -1,0 +1,80 @@
+// Schéma Prisma – Quiz Races de Chiens
+// Base de données : PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// Modèle Race : informations persistantes sur chaque race de chien
+// ------------------------------------------------------------------
+model Race {
+  id          String   @id @default(cuid())
+  /// Nom anglais de la race (identifiant unique Dog CEO API)
+  name        String   @unique
+  /// Nom français de la race (affiché à l'utilisateur)
+  nomFrancais String
+  /// Groupe cynologique (Berger, Retriever, Terrier, etc.)
+  groupe      String?
+  /// Taille (Toy, Petit, Moyen, Grand, Géant)
+  taille      String?
+  /// Description courte de la race
+  description String?
+  /// Types d'oreilles (Dressées, Tombantes, Semi-dressées, Longues)
+  typeOreilles String[]
+  /// Types de queue (Droite, Enroulée, Courte, En panache)
+  typeQueue   String[]
+  /// Types de poil (Court, Mi-long, Long, Bouclé, Dur)
+  typePoil    String[]
+  /// ID de la race sur The Dog API (pour enrichissement)
+  dogApiId    Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions   Question[]
+
+  @@map("races")
+}
+
+// ------------------------------------------------------------------
+// Modèle Question : une combinaison race + image
+// ------------------------------------------------------------------
+model Question {
+  id         String   @id @default(cuid())
+  raceName   String
+  imageUrl   String
+  /// Difficulté estimée (1=facile, 2=moyen, 3=difficile)
+  difficulte Int      @default(1)
+  createdAt  DateTime @default(now())
+
+  race      Race      @relation(fields: [raceName], references: [name])
+  tentatives Tentative[]
+
+  @@map("questions")
+}
+
+// ------------------------------------------------------------------
+// Modèle Tentative : réponse d'un utilisateur à une question
+// ------------------------------------------------------------------
+model Tentative {
+  id                 String   @id @default(cuid())
+  questionId         String
+  /// Race sélectionnée par l'utilisateur
+  raceSelectionnee   String
+  /// Attributs sélectionnés (JSON) : { oreilles, queue, poil, taille, groupe }
+  attributsSelectionnes Json
+  /// Score obtenu sur cette tentative (max 10)
+  score              Int      @default(0)
+  /// Indique si l'utilisateur a abandonné (Je ne sais pas)
+  abandonnee         Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@map("tentatives")
+}
