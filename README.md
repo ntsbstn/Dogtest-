@@ -2,7 +2,7 @@
 
 Application web interactive pour tester vos connaissances sur les races de chiens à partir de photos et d'attributs morphologiques.
 
-**Stack** : Next.js 14 · TypeScript · Tailwind CSS · PostgreSQL · Prisma · Vercel
+**Stack** : Next.js 14 · TypeScript · Tailwind CSS · Supabase (PostgreSQL) · Vercel
 
 ---
 
@@ -26,8 +26,7 @@ Application web interactive pour tester vos connaissances sur les races de chien
 | Next.js 14 (App Router) | Framework React avec SSR/SSG |
 | TypeScript strict | Typage complet |
 | Tailwind CSS | Styles utilitaires |
-| Prisma ORM | Gestion base de données |
-| PostgreSQL | Base de données persistante |
+| Supabase | Base de données PostgreSQL + API REST (connexion HTTPS, compatible Vercel) |
 | Dog CEO API | Photos des chiens (gratuit, sans clé) |
 | The Dog API | Enrichissement des fiches races (clé gratuite) |
 
@@ -38,7 +37,7 @@ Application web interactive pour tester vos connaissances sur les races de chien
 ### Prérequis
 
 - **Node.js** ≥ 18.17
-- **PostgreSQL** ≥ 14 (local ou hébergé)
+- Un projet **Supabase** (gratuit sur [supabase.com](https://supabase.com))
 - **npm** ≥ 9
 
 ### 1. Cloner le projet
@@ -60,29 +59,23 @@ npm install
 cp .env.example .env.local
 ```
 
-Éditez `.env.local` :
+Éditez `.env.local` avec l’URL du projet Supabase et la clé **service_role** (Settings → API dans le dashboard Supabase) :
 
 ```env
-# URL de connexion PostgreSQL (obligatoire)
-DATABASE_URL="postgresql://postgres:motdepasse@localhost:5432/quiz_chiens"
+NEXT_PUBLIC_SUPABASE_URL="https://xxxxx.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="eyJ..."
 
-# Clé API The Dog API (optionnel – pour les descriptions de races)
+# Optionnel – pour les descriptions de races
 DOG_API_KEY="votre-cle-api"
 ```
 
-> **The Dog API** : Créez un compte gratuit sur [thedogapi.com](https://thedogapi.com/) pour obtenir votre clé. L'application fonctionne sans cette clé (les descriptions de races seront génériques).
+> **The Dog API** : Compte gratuit sur [thedogapi.com](https://thedogapi.com/). L’app fonctionne sans cette clé (descriptions génériques).
 
-### 4. Créer la base de données et appliquer les migrations
+### 4. Créer les tables dans Supabase
 
-```bash
-# Créer la base de données et appliquer le schéma Prisma
-npx prisma migrate dev --name init
+Dans le **SQL Editor** de votre projet Supabase, exécutez le script de création des tables. Le fichier se trouve dans `prisma/migrations/20260223165020_init/migration.sql` (ou voir section Dépannage).
 
-# Générer le client Prisma
-npx prisma generate
-```
-
-### 5. Peupler la base de données (seed)
+### 5. Peupler la base (seed)
 
 ```bash
 # Importe toutes les races depuis Dog CEO API
@@ -203,10 +196,11 @@ model Tentative {
 
 1. Pushez votre code sur GitHub/GitLab
 2. Connectez votre dépôt sur [vercel.com](https://vercel.com)
-3. Configurez les variables d'environnement dans Vercel Dashboard → Settings → Environment Variables :
-   - `DATABASE_URL` (PostgreSQL – utilisez [Neon](https://neon.tech), [Supabase](https://supabase.com) ou [PlanetScale](https://planetscale.com))
+3. Configurez les variables d'environnement dans Vercel → Settings → Environment Variables :
+   - `NEXT_PUBLIC_SUPABASE_URL` (URL du projet Supabase)
+   - `SUPABASE_SERVICE_ROLE_KEY` (clé service_role, dans Supabase → Settings → API)
    - `DOG_API_KEY` (optionnel)
-4. Déployez !
+4. Déployez. Aucun pooler ni connexion PostgreSQL directe : le client Supabase utilise l’API HTTPS.
 
 ### Option B : Via Vercel CLI
 
@@ -221,29 +215,11 @@ vercel
 vercel --prod
 ```
 
-### Configuration recommandée pour Vercel + Neon (PostgreSQL serverless)
-
-```env
-DATABASE_URL="postgresql://[user]:[password]@[host]/[database]?sslmode=require&pgbouncer=true"
-DIRECT_URL="postgresql://[user]:[password]@[host]/[database]?sslmode=require"
-```
-
-Ajoutez dans `schema.prisma` :
-```prisma
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")  // Pour les migrations Prisma
-}
-```
-
 ### Post-déploiement
 
 ```bash
-# Appliquer les migrations en production
-npx prisma migrate deploy
-
-# Lancer le seed
+# Si les tables n’existent pas encore en production : exécuter le SQL dans Supabase (voir section Installation).
+# Puis lancer le seed si besoin :
 npm run db:seed
 ```
 
@@ -277,11 +253,7 @@ npm run build         # Build de production
 npm run start         # Démarrer en production
 npm run lint          # Vérification ESLint
 
-npm run prisma:generate  # Générer le client Prisma
-npm run prisma:migrate   # Créer et appliquer une migration
-npm run prisma:studio    # Interface graphique de la base de données
-
-npm run db:seed          # Peupler la base avec les races
+npm run db:seed          # Peupler la base avec les races (Supabase)
 ```
 
 ---
@@ -291,13 +263,13 @@ npm run db:seed          # Peupler la base avec les races
 | Décision | Raison |
 |---|---|
 | **App Router Next.js 14** | Composants serveur, meilleur SSR, layout natif |
-| **Client Prisma singleton** | Évite les connexions multiples en dev avec HMR |
+| **Client Supabase (service_role)** | Accès API REST HTTPS, compatible Vercel sans pooler |
 | **Cache en mémoire (lib/)** | Limite les appels API externes sans Redis |
 | **`force-dynamic` sur les routes** | Les questions sont aléatoires, pas de mise en cache CDN |
 | **Enrichissement statique (seed)** | Les attributs morphologiques ne changent pas → seed plutôt qu'API en temps réel |
 | **Autocomplete côté client** | UX meilleure pour la saisie de la race |
 | **Score calculé côté serveur** | Prévient la triche côté client |
-| **PostgreSQL plutôt que SQLite** | Compatibilité Vercel/Neon, scalabilité |
+| **Supabase plutôt que Prisma + PostgreSQL direct** | Connexion HTTPS, pas de souci de pooler sur Vercel |
 
 ---
 
@@ -307,13 +279,13 @@ npm run db:seed          # Peupler la base avec les races
 → Lancez `npm run db:seed`
 
 **Erreur de connexion à la base**
-→ Vérifiez `DATABASE_URL` dans `.env.local`
+→ Vérifiez `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` dans `.env.local`
 
 **Les images ne chargent pas**
 → Vérifiez que `images.dog.ceo` est autorisé dans `next.config.ts`
 
-**Prisma : erreur "The table 'races' does not exist"**
-→ Lancez `npx prisma migrate dev --name init`
+**Erreur "relation races does not exist"**
+→ Exécutez le script SQL dans `prisma/migrations/20260223165020_init/migration.sql` dans le SQL Editor de Supabase.
 
 ---
 

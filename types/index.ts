@@ -63,6 +63,7 @@ export interface Race {
   typeQueue:    string[]
   typePoil:     string[]
   dogApiId:     number | null
+  enrichie:     boolean
   createdAt:    string
   updatedAt:    string
 }

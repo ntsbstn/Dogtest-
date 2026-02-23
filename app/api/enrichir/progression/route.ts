@@ -4,31 +4,33 @@
  */
 
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const [total, enrichies] = await Promise.all([
-      prisma.race.count(),
-      prisma.race.count({ where: { enrichie: true } }),
+    const [
+      { count: total },
+      { count: enrichies },
+    ] = await Promise.all([
+      supabase.from('races').select('*', { count: 'exact', head: true }),
+      supabase.from('races').select('*', { count: 'exact', head: true }).eq('enrichie', true),
     ])
 
-    // Récupérer les 5 dernières races enrichies pour affichage
-    const dernieresEnrichies = await prisma.race.findMany({
-      where: { enrichie: true },
-      orderBy: { updatedAt: 'desc' },
-      take: 5,
-      select: { name: true, nomFrancais: true, updatedAt: true },
-    })
+    const { data: dernieresEnrichies } = await supabase
+      .from('races')
+      .select('name, nomFrancais, updatedAt')
+      .eq('enrichie', true)
+      .order('updatedAt', { ascending: false })
+      .limit(5)
 
     return NextResponse.json({
-      total,
-      enrichies,
-      restantes: total - enrichies,
-      pourcentage: total > 0 ? Math.round((enrichies / total) * 100) : 0,
-      dernieresEnrichies,
+      total: total ?? 0,
+      enrichies: enrichies ?? 0,
+      restantes: (total ?? 0) - (enrichies ?? 0),
+      pourcentage: (total ?? 0) > 0 ? Math.round(((enrichies ?? 0) / (total ?? 0)) * 100) : 0,
+      dernieresEnrichies: dernieresEnrichies ?? [],
     })
   } catch (erreur) {
     console.error('[API /enrichir/progression] Erreur:', erreur)

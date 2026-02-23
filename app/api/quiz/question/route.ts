@@ -5,18 +5,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { supabase } from '@/lib/supabase'
 import { fetchImageAleatoire } from '@/lib/dogCeoApi'
 
 export const dynamic = 'force-dynamic'
+
+function generateId() {
+  return crypto.randomUUID()
+}
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const exclusions = searchParams.get('exclure')?.split(',').filter(Boolean) ?? []
 
-    // Compter le nombre de races disponibles
-    const totalRaces = await prisma.race.count()
+    const { count: totalRaces } = await supabase
+      .from('races')
+      .select('*', { count: 'exact', head: true })
     if (totalRaces === 0) {
       return NextResponse.json(
         {
@@ -27,27 +32,29 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Sélectionner une race au hasard (en excluant les races récemment vues via questions)
-    const racesVues = exclusions.length > 0
-      ? await prisma.question.findMany({
-          where: { id: { in: exclusions } },
-          select: { raceName: true },
-        }).then((qs) => qs.map((q) => q.raceName))
-      : []
+    let racesVues: string[] = []
+    if (exclusions.length > 0) {
+      const { data: questions } = await supabase
+        .from('questions')
+        .select('raceName')
+        .in('id', exclusions)
+      racesVues = (questions ?? []).map((q) => q.raceName)
+    }
 
-    // Préférer les races enrichies manuellement pour le quiz
-    // Si aucune race enrichie disponible, fallback sur toutes les races
-    const totalEnrichies = await prisma.race.count({ where: { enrichie: true } })
-    const filtreEnrichie = totalEnrichies > 0 ? { enrichie: true } : {}
+    const { count: totalEnrichies } = await supabase
+      .from('races')
+      .select('*', { count: 'exact', head: true })
+      .eq('enrichie', true)
 
-    const races = await prisma.race.findMany({
-      where: {
-        ...filtreEnrichie,
-        ...(racesVues.length > 0 ? { name: { notIn: racesVues } } : {}),
-      },
-      select: { name: true },
-    })
+    const enrichieFilter = totalEnrichies && totalEnrichies > 0 ? { enrichie: true } : {}
+    const { data: racesData } = await supabase
+      .from('races')
+      .select('name')
+      .match(enrichieFilter)
 
+    let races = (racesData ?? []).filter(
+      (r) => racesVues.length === 0 || !racesVues.includes(r.name),
+    )
     if (races.length === 0) {
       return NextResponse.json(
         { erreur: 'Toutes les races enrichies ont été jouées dans cette session ! Enrichissez davantage de races ou recommencez.' },
@@ -55,15 +62,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Race aléatoire
-    const raceAleatoire = races[Math.floor(Math.random() * races.length)]
+    const raceAleatoire = races[Math.floor(Math.random() * races.length)]!
 
-    // Récupérer l'image depuis Dog CEO API
     let imageUrl: string
     try {
       imageUrl = await fetchImageAleatoire(raceAleatoire.name)
     } catch {
-      // Si Dog CEO API échoue pour cette race, on réessaie avec une autre
       const raceSecours = races.find((r) => r.name !== raceAleatoire.name)
       if (!raceSecours) {
         return NextResponse.json(
@@ -74,28 +78,40 @@ export async function GET(request: NextRequest) {
       imageUrl = await fetchImageAleatoire(raceSecours.name)
     }
 
-    // Récupérer les détails complets de la race
-    const race = await prisma.race.findUnique({
-      where: { name: raceAleatoire.name },
-    })
+    const { data: race, error: raceError } = await supabase
+      .from('races')
+      .select('*')
+      .eq('name', raceAleatoire.name)
+      .single()
 
-    if (!race) {
+    if (raceError || !race) {
       return NextResponse.json(
         { erreur: 'Race introuvable en base.' },
         { status: 404 },
       )
     }
 
-    // Créer ou réutiliser la question
-    const question = await prisma.question.create({
-      data: {
+    const questionId = generateId()
+    const { data: questionRow, error: insertError } = await supabase
+      .from('questions')
+      .insert({
+        id: questionId,
         raceName: race.name,
         imageUrl,
         difficulte: 1,
-      },
-      include: { race: true },
-    })
+      })
+      .select()
+      .single()
 
+    if (insertError || !questionRow) {
+      console.error('[API /quiz/question] Insert question:', insertError)
+      return NextResponse.json(
+        { erreur: 'Erreur lors de la génération de la question.' },
+        { status: 500 },
+      )
+    }
+
+    const question = { ...questionRow, race }
     return NextResponse.json({ question })
   } catch (erreur) {
     console.error('[API /quiz/question] Erreur:', erreur)

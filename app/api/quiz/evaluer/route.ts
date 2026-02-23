@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { supabase } from '@/lib/supabase'
 import { evaluerReponse } from '@/lib/scoring'
 import { rechercherRace } from '@/lib/theDogApi'
 import type { AttributsSelectionnes } from '@/types'
@@ -36,7 +36,6 @@ export async function POST(request: NextRequest) {
       abandonnee = false,
     } = corps
 
-    // Validation
     if (!questionId || raceSelectionnee === undefined) {
       return NextResponse.json(
         { erreur: 'questionId et raceSelectionnee sont requis.' },
@@ -44,20 +43,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Récupérer la question et la race associée
-    const question = await prisma.question.findUnique({
-      where: { id: questionId },
-      include: { race: true },
-    })
+    const { data: questionRow, error: questionError } = await supabase
+      .from('questions')
+      .select('*, races(*)')
+      .eq('id', questionId)
+      .single()
 
-    if (!question) {
+    if (questionError || !questionRow) {
       return NextResponse.json(
         { erreur: 'Question introuvable.' },
         { status: 404 },
       )
     }
 
-    // Calculer le score (0 si abandonnée)
+    const raceEmbed = (questionRow as { races?: unknown }).races
+    const race = Array.isArray(raceEmbed) ? raceEmbed[0] : raceEmbed
+    const question = { ...questionRow, race }
+    if (!question.race) {
+      return NextResponse.json(
+        { erreur: 'Question introuvable.' },
+        { status: 404 },
+      )
+    }
+
     const resultatScoring = abandonnee
       ? {
           raceCorrecte: false,
@@ -73,26 +81,23 @@ export async function POST(request: NextRequest) {
         }
       : evaluerReponse(question.race, raceSelectionnee, attributsSelectionnes)
 
-    // Enregistrer la tentative
-    const tentative = await prisma.tentative.create({
-      data: {
-        questionId,
-        raceSelectionnee: abandonnee ? '' : raceSelectionnee,
-        attributsSelectionnes: attributsSelectionnes as object,
-        score: resultatScoring.score,
-        abandonnee,
-      },
+    const tentativeId = crypto.randomUUID()
+    await supabase.from('tentatives').insert({
+      id: tentativeId,
+      questionId,
+      raceSelectionnee: abandonnee ? '' : raceSelectionnee,
+      attributsSelectionnes: attributsSelectionnes as object,
+      score: resultatScoring.score,
+      abandonnee,
     })
 
-    // Enrichissement optionnel via The Dog API
     let raceDetaillee = null
     if (question.race.dogApiId) {
-      // On a déjà l'ID – pas besoin de recherche
+      // déjà enrichi
     } else {
       raceDetaillee = await rechercherRace(question.race.name)
     }
 
-    // Fusionner la description enrichie si disponible
     const raceEnrichie = {
       ...question.race,
       description:
@@ -109,12 +114,18 @@ export async function POST(request: NextRequest) {
         raceName:   question.raceName,
         imageUrl:   question.imageUrl,
         difficulte: question.difficulte,
-        createdAt:  question.createdAt,
+        createdAt: question.createdAt,
         race:       raceEnrichie,
       },
     }
 
-    return NextResponse.json({ resultat, tentative })
+    const { data: tentative } = await supabase
+      .from('tentatives')
+      .select('*')
+      .eq('id', tentativeId)
+      .single()
+
+    return NextResponse.json({ resultat, tentative: tentative ?? {} })
   } catch (erreur) {
     console.error('[API /quiz/evaluer] Erreur:', erreur)
     return NextResponse.json(

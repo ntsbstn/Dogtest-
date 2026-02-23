@@ -15,17 +15,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 interface CorpsRequete {
-  raceName:    string
+  raceName:     string
   typeOreilles: string[]
-  typeQueue:   string[]
-  typePoil:    string[]
-  taille:      string
-  groupe:      string
+  typeQueue:    string[]
+  typePoil:     string[]
+  taille:       string
+  groupe:       string
   description?: string
 }
 
@@ -34,7 +34,6 @@ export async function POST(request: NextRequest) {
     const corps: CorpsRequete = await request.json()
     const { raceName, typeOreilles, typeQueue, typePoil, taille, groupe, description } = corps
 
-    // Validation basique
     if (!raceName) {
       return NextResponse.json({ erreur: 'raceName est requis.' }, { status: 400 })
     }
@@ -51,24 +50,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const race = await prisma.race.update({
-      where: { name: raceName },
-      data: {
-        typeOreilles,
-        typeQueue,
-        typePoil,
-        taille,
-        groupe,
-        ...(description ? { description } : {}),
-        enrichie: true,
-      },
-    })
+    const update: Record<string, unknown> = {
+      typeOreilles,
+      typeQueue,
+      typePoil,
+      taille,
+      groupe,
+      enrichie: true,
+      updatedAt: new Date().toISOString(),
+    }
+    if (description != null) update.description = description
 
+    const { data: race, error } = await supabase
+      .from('races')
+      .update(update)
+      .eq('name', raceName)
+      .select()
+      .single()
+
+    if (error) throw error
     return NextResponse.json({ race, succes: true })
   } catch (erreur) {
     console.error('[API /enrichir/sauvegarder] Erreur:', erreur)
     return NextResponse.json(
-      { erreur: "Impossible de sauvegarder les données de la race." },
+      { erreur: 'Impossible de sauvegarder les données de la race.' },
       { status: 500 },
     )
   }
@@ -77,7 +82,6 @@ export async function POST(request: NextRequest) {
 /**
  * DELETE /api/enrichir/sauvegarder?race=name
  * Réinitialise une race (la marque comme non enrichie).
- * Utile pour corriger une erreur de saisie.
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -88,10 +92,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ erreur: 'Paramètre race manquant.' }, { status: 400 })
     }
 
-    await prisma.race.update({
-      where: { name: raceName },
-      data: { enrichie: false },
-    })
+    await supabase
+      .from('races')
+      .update({ enrichie: false, updatedAt: new Date().toISOString() })
+      .eq('name', raceName)
 
     return NextResponse.json({ succes: true })
   } catch (erreur) {

@@ -7,8 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { fetchImageAleatoire } from '@/lib/dogCeoApi'
+import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,52 +17,43 @@ export async function GET(request: NextRequest) {
     const exclusions = searchParams.get('exclure')?.split(',').filter(Boolean) ?? []
     const ordre = searchParams.get('ordre') ?? 'alphabetique'
 
-    // Compter le total et les races déjà enrichies pour la progression
-    const [totalRaces, totalEnrichies] = await Promise.all([
-      prisma.race.count(),
-      prisma.race.count({ where: { enrichie: true } }),
+    const [
+      { count: totalRaces },
+      { count: totalEnrichies },
+    ] = await Promise.all([
+      supabase.from('races').select('*', { count: 'exact', head: true }),
+      supabase.from('races').select('*', { count: 'exact', head: true }).eq('enrichie', true),
     ])
 
-    // Récupérer la prochaine race non enrichie (hors exclusions de session)
-    const prochaineRace = await prisma.race.findFirst({
-      where: {
-        enrichie: false,
-        ...(exclusions.length > 0 ? { name: { notIn: exclusions } } : {}),
-      },
-      orderBy:
-        ordre === 'aleatoire'
-          ? undefined // Prisma ne supporte pas ORDER BY RANDOM nativement
-          : { nomFrancais: 'asc' },
-    })
+    let req = supabase
+      .from('races')
+      .select('*')
+      .eq('enrichie', false)
 
-    if (!prochaineRace) {
+    if (ordre === 'alphabetique') {
+      req = req.order('nomFrancais', { ascending: true })
+    }
+
+    const { data: rows } = await req.limit(500)
+    const filtered =
+      exclusions.length > 0 && rows
+        ? rows.filter((r) => !exclusions.includes(r.name))
+        : rows ?? []
+
+    let race = filtered[0] ?? null
+    if (ordre === 'aleatoire' && filtered.length > 1) {
+      race = filtered[Math.floor(Math.random() * filtered.length)] ?? null
+    }
+
+    if (!race) {
       return NextResponse.json({
         terminee: true,
-        totalRaces,
-        totalEnrichies,
+        totalRaces: totalRaces ?? 0,
+        totalEnrichies: totalEnrichies ?? 0,
         message: 'Toutes les races ont été enrichies !',
       })
     }
 
-    // Si ordre aléatoire, on choisit parmi toutes les non-enrichies
-    let race = prochaineRace
-    if (ordre === 'aleatoire') {
-      const toutesNonEnrichies = await prisma.race.findMany({
-        where: {
-          enrichie: false,
-          ...(exclusions.length > 0 ? { name: { notIn: exclusions } } : {}),
-        },
-        select: { name: true },
-      })
-      if (toutesNonEnrichies.length > 0) {
-        const choix =
-          toutesNonEnrichies[Math.floor(Math.random() * toutesNonEnrichies.length)]
-        const raceChoisie = await prisma.race.findUnique({ where: { name: choix.name } })
-        if (raceChoisie) race = raceChoisie
-      }
-    }
-
-    // Récupérer plusieurs images pour permettre à l'utilisateur de choisir la meilleure vue
     let images: string[] = []
     try {
       const res = await fetch(
@@ -74,8 +64,8 @@ export async function GET(request: NextRequest) {
         images = data.message ?? []
       }
     } catch {
-      // Fallback : une seule image
       try {
+        const { fetchImageAleatoire } = await import('@/lib/dogCeoApi')
         const img = await fetchImageAleatoire(race.name)
         images = [img]
       } catch {
@@ -88,10 +78,12 @@ export async function GET(request: NextRequest) {
       race,
       images,
       progression: {
-        total:     totalRaces,
-        enrichies: totalEnrichies,
-        restantes: totalRaces - totalEnrichies,
-        pourcentage: Math.round((totalEnrichies / totalRaces) * 100),
+        total:     totalRaces ?? 0,
+        enrichies: totalEnrichies ?? 0,
+        restantes: (totalRaces ?? 0) - (totalEnrichies ?? 0),
+        pourcentage: (totalRaces ?? 0) > 0
+          ? Math.round(((totalEnrichies ?? 0) / (totalRaces ?? 0)) * 100)
+          : 0,
       },
     })
   } catch (erreur) {

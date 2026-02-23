@@ -4,18 +4,20 @@
  */
 
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { supabase } from '@/lib/supabase'
 import { calculerTauxReussite } from '@/lib/scoring'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const tentatives = await prisma.tentative.findMany({
-      select: { score: true, abandonnee: true },
-    })
+    const { data: tentatives, error } = await supabase
+      .from('tentatives')
+      .select('score, abandonnee')
 
-    const total = tentatives.length
+    if (error) throw error
+    const list = tentatives ?? []
+    const total = list.length
 
     if (total === 0) {
       return NextResponse.json({
@@ -28,11 +30,11 @@ export async function GET() {
       })
     }
 
-    const scores       = tentatives.map((t) => t.score)
-    const sommeScores  = scores.reduce((acc, s) => acc + s, 0)
-    const scoreMoyen   = Math.round((sommeScores / total) * 10) / 10
-    const meilleurScore = Math.max(...scores)
-    const tauxReussite  = calculerTauxReussite(scores)
+    const scores         = list.map((t) => t.score)
+    const sommeScores    = scores.reduce((acc, s) => acc + s, 0)
+    const scoreMoyen     = Math.round((sommeScores / total) * 10) / 10
+    const meilleurScore  = Math.max(...scores)
+    const tauxReussite   = calculerTauxReussite(scores)
 
     return NextResponse.json({
       statistiques: {
