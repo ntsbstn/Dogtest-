@@ -386,7 +386,7 @@ async function main() {
       typeOreilles: enrichi?.typeOreilles ?? ['Tombantes'],
       typeQueue: enrichi?.typeQueue ?? ['Droite'],
       typePoil: enrichi?.typePoil ?? ['Court'],
-      dogApiId: theDogData?.id ?? null,
+      dogApiId: theDogData?.id != null ? Number(theDogData.id) : null,
       // Marquer comme enrichie uniquement les races avec des données manuelles validées
       enrichie: !!enrichi,
     }
