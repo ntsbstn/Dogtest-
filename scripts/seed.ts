@@ -6,9 +6,12 @@
  *
  * Lancement : npm run db:seed
  * Variables : NEXT_PUBLIC_SUPABASE_URL (ou SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY, DOG_API_KEY (optionnel)
+ * Charge .env puis .env.local (comme Next.js).
  */
 
-import 'dotenv/config'
+import dotenv from 'dotenv'
+dotenv.config()
+dotenv.config({ path: '.env.local' })
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL
