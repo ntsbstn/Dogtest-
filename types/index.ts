@@ -6,16 +6,21 @@
 
 export const TYPES_OREILLES = [
   'Dressées',
+  'Semi-tombantes',
   'Tombantes',
-  'Semi-dressées',
-  'Longues',
+  'En rose',
 ] as const
 
 export const TYPES_QUEUE = [
+  'Relevée faucille',
+  'Relevée sabre',
+  'Relevée chandelle',
+  'Relevée cross',
+  'Relevée enroulée',
   'Droite',
-  'Enroulée',
-  'Courte',
-  'En panache',
+  'Tombante cimeterre',
+  'Tombante J',
+  'Tombantes S',
 ] as const
 
 export const TYPES_POIL = [
@@ -35,13 +40,16 @@ export const TAILLES = [
 ] as const
 
 export const GROUPES = [
-  'Berger',
-  'Retriever',
-  'Spitz',
-  'Terrier',
-  'Chien courant',
-  'Molosse',
-  'Compagnie',
+  'Chiens de berger et bouvier',
+  'Pinscher, Schnauzer et molossoïdes',
+  'Terriers',
+  'Teckels',
+  'Spitz et primitifs',
+  'Chiens courants',
+  "Chiens d'arrêt",
+  "Retrievers et chiens d'eau",
+  "Chiens d'agrément",
+  'Lévriers',
 ] as const
 
 export type TypeOreilles  = typeof TYPES_OREILLES[number]
