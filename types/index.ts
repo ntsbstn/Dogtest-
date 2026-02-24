@@ -6,16 +6,21 @@
 
 export const TYPES_OREILLES = [
   'Dressées',
+  'Semi-tombantes',
   'Tombantes',
-  'Semi-dressées',
-  'Longues',
+  'En rose',
 ] as const
 
 export const TYPES_QUEUE = [
+  'Relevée faucille',
+  'Relevée sabre',
+  'Relevée chandelle',
+  'Relevée cross',
+  'Relevée enroulée',
   'Droite',
-  'Enroulée',
-  'Courte',
-  'En panache',
+  'Tombante cimeterre',
+  'Tombante J',
+  'Tombantes S',
 ] as const
 
 export const TYPES_POIL = [
