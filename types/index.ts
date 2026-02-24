@@ -35,13 +35,16 @@ export const TAILLES = [
 ] as const
 
 export const GROUPES = [
-  'Berger',
-  'Retriever',
-  'Spitz',
-  'Terrier',
-  'Chien courant',
-  'Molosse',
-  'Compagnie',
+  'Chiens de berger et bouvier',
+  'Pinscher, Schnauzer et molossoïdes',
+  'Terriers',
+  'Teckels',
+  'Spitz et primitifs',
+  'Chiens courants',
+  "Chiens d'arrêt",
+  "Retrievers et chiens d'eau",
+  "Chiens d'agrément",
+  'Lévriers',
 ] as const
 
 export type TypeOreilles  = typeof TYPES_OREILLES[number]
